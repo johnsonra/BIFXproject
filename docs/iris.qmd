@@ -2,8 +2,17 @@
 title: "Learning R on iris"
 author: "Based on the Rpubs tutorial found at https://rpubs.com/moeransm/intro-iris"
 format: html
+theme:
+  light: flatly
+  dark: darkly
 editor: visual
 ---
+
+::: callout-note
+## Giving credit where credit is due
+
+This page was copied as an exercise to practice markdown. The [original page](https://rpubs.com/moeransm/intro-iris) was published by Stephen Malefetsane Moerane in August of 2016 at \<Rpubs.com\>.
+:::
 
 ## Introduction
 
@@ -21,7 +30,11 @@ data(iris)
 summary(iris)
 ```
 
-The `summary()` function gives summary statistics for any dataset. It can also be called on one variable instead of on the whole dataset. Try `summary(iris$Sepal.Length)` and compare that with the above summaries.
+::: callout-tip
+## The summary() function gives summary statistics for any dataset.
+
+It can also be called on one variable instead of on the whole dataset. Try `summary(iris$Sepal.Length)` and compare that with the above summaries.
+:::
 
 Alternatively, you may only want to know the column names of your dataset, in which case you can use `names(NameOfdataset)`, which in our case would look like `names(iris)`. Also notice that each coloumn name in the `iris` dataset has some upper case letters, which might be inconvenient to work with. You can then call the `tolower()` function on `names(iris)` to make this change. For those who might prefer upper case column names, the `toupper()` function will instead, be useful.
 
@@ -93,3 +106,35 @@ arr.virg[30:35,] # will show us rows 30 through 35 and all columns
 # summarise()
 summarise(arr.virg, mean.length = mean(sepal.length, na.rm = TRUE))
 ```
+
+This is the mean sepal.length for the virginica species. Challenge2: The standard deviation gives how much individual values vary from the mean. Find the standard deviation of sepal.length using `summarise()` and `sd()`
+
+### **Visualization**
+
+Any powerful analysis will visualize the data to give a better picture (*wink wink*) of the data. Below is a general plot of the iris dataset:
+
+```{r}
+#| code-fold: true
+plot(iris)
+```
+
+If we're looking to plot specific variables, we can use `plot(x,y)` where `x` and `y` are the variables we\'re interested in. `hist()` is another useful function.
+
+```{r}
+#| code-fold: true
+# use ?plot to read more about other arguments
+plot(iris$sepal.width, iris$sepal.length)
+
+# ?hist will give you details on more arguments
+hist(iris$sepal.width)
+```
+
+Notice that in flowers with greater sepal widths tend to have shorter sepal lengths.
+
+For more resources on R, visit:
+
+-   <http://www.cyclismo.org/tutorial/R/>
+
+-   <http://www.tutprialspoint.com/r>
+
+-   [http://had.co.nz](http://had.co.nz/)
