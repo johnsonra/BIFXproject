@@ -11,7 +11,18 @@ magic_coin <- function(seeds, input = list())
     # check for up to 100 heads in a row (it is unlikely that we'll find 100)
     ncheck <- 100
     
-    #...
+    nheads <- numeric(length(seeds))
+        
+    for(i in 1:length(seeds))
+    {
+        set.seed(seeds[i])
+        
+        # flip `ncheck` coins
+        heads <- rbinom(ncheck, 1, 0.5)
+        
+        # see how many heads we get in a row after setting the seed
+        nheads[i] <- which(heads == 0)[1] - 1
+    }
     
     bind_rows(input,
               tibble(nheads = nheads,
