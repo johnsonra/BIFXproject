@@ -1,0 +1,265 @@
+---
+title: "Epidemiology for Bioinformaticians"
+format: 
+  html:
+    theme: 
+      light: flatly
+      dark: darkly
+  docx:
+    date: Sep 15, 2022
+---
+
+This lab borrows heavily from the Bioconductor Conference workshop, [Epidemiology for Bioinformatics](https://bioc2022.bioconductor.org/abstracts/paper43/).
+
+## Agenda
+
+-   Today's lab
+    -   Class discussion on causality and bias ([see presentation here](presentation.html))
+    -   Epidemiology tools in R and Quarto (install `curatedMetagenomicData` while we discuss)
+
+## Introduction: Just what is a cause anyway?
+
+<!--# Start with Introduction then move on to the presentation -->
+
+::: callout-tip
+## Discussion
+
+-   In your own words, what is a cause?
+
+-   What does it mean to cause something?
+
+-   How do we know our potential cause brought about an effect or a result?
+:::
+
+Perhaps it preceded the effect of interest. However, it could still just be a coincidence. Perhaps there is a lurking variable that truly causes both what we think is the cause and the observed effect. Despite this, humans (and animals) tend to have a relatively intuitive understanding of causation when we observe it directly.
+
+When I burn my finger while cooking, I know what caused it--my finger coming into contact with a hot stove. I could also trace the causal pathway backward and identify what caused my finger to come into contact with the hot stove in the first place--such as my motivation to cook dinner or me being distracted by the antics of my cat.
+
+::: callout-tip
+## Discussion
+
+What are some causal questions we may be interested in within the context of Bioinformatics (or your field of work/study/research)?
+:::
+
+## DAGs
+
+We can visualize the relationship using a causal diagram also called a directed acyclic graph (DAG).
+
+```{mermaid}
+flowchart LR
+    C[Ambulance] --> E[Dog Barking]
+```
+
+Mermaid offers both an online version (<https://mermaid.live/>) and it is supported by Quarto. The online version provides a user interface. You can also export the diagram from the online interface to a file.
+
+### Exercise 1
+
+-   Create a Quarto document (export to `docx`).
+
+-   Make a dag for a system of your choosing in your document. You may want to interactively edit it on [mermaid.live](https://mermaid.live) and then copy/paste the code over to your document.
+
+<!--# Back to presentation at this point for Bias and Counfounding -->
+
+## Bias
+
+::: callout-tip
+## Discussion
+
+What are some common confounders in bioinformatics or health research?
+:::
+
+### Exercise 2
+
+-   Consider potential confounders with respect to your DAG from Exercise 1.
+
+<!--# Back to presentation for other types of bias -->
+
+## Study Designs
+
+::: callout-tip
+## Discussion
+
+-   How can selection bias occur in a Randomized Control Trial (RCT)?
+
+-   Instrumental Variable/Mendelian Randomization (IV/MR) studies can seem quite powerful because they allow us to make stronger causal arguments without doing an RCT. What might be some issues with doing IV/MR studies?
+
+-   What are some possible sources of confounding or bias in a Genome-Wide Association Study (GWAS)?
+:::
+
+## Exercise in R using curatedMetagenomicData and DESeq2
+
+We will be using the VogtmannE 2016 dataset in `curatedMetagenomicData`. The dataset has 52 cases of colorectal cancer (crc) and 52 controls. First, let's create a causal diagram for this relationship.
+
+1.  We are interested on whether our exposure (colorectal cancer) changes the outcome (gut microbiome). Create a DAG for this relationship. Consider possible confounders, selection bias, etc. Using the DAG, determine what to adjust for.
+2.  In R, download the data and look at study condition. Remove any missing values.
+3.  Run a bivariate model of the exposure and the outcome without any deconfounding. What bacterial taxa are significant?
+4.  Deconfound for confounders you identified in your DAG. If you can't deconfound for them because they were not measured, how does that affect your results? Install curatedMetagenomicData
+
+```{r, eval = FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("curatedMetagenomicData")
+BiocManager::install("phyloseq")
+BiocManager::install("DESeq2")
+```
+
+```{r, echo=FALSE, message=FALSE}
+library(curatedMetagenomicData)
+library(mia)
+library(phyloseq)
+library(DESeq2)
+```
+
+Draw our assumptions. For this example, we use the VogtmannE 2016 dataset in cMD. The dataset has 52 cases of colorectal cancer (crc) and 52 controls. First, let's create a causal diagram for this relationship.
+
+```{mermaid}
+flowchart LR
+  C[crc] --> M[microbiome]
+  A[age] --> C
+  A --> M
+  G[gender] --> C
+  G --> M
+```
+
+What do we need to adjust for?
+
+Download the data, extract the `expressionset`, and only take responses for which we have a value for study condition.
+
+```{r, warning=FALSE, message=FALSE, results='hide'}
+# download the data
+vogtmann <- curatedMetagenomicData("2021-03-31.VogtmannE_2016.relative_abundance", 
+                                   dryrun = FALSE, counts = TRUE)
+
+# extract the `expressionset`
+vm <- vogtmann$`2021-03-31.VogtmannE_2016.relative_abundance`
+
+# only keep responses for which we have a value for study condition
+vm.sub <- vm[,!is.na(vm$study_condition)]
+```
+
+```{r}
+table(vm.sub$study_condition, useNA="ifany")
+```
+
+First we conduct a basic analysis to examine whether there are any statistically significant differences in taxa of microbiota by study condition. We find 172 significant taxa in this crude analysis.
+
+```{r, warning=FALSE, message=FALSE, results='hide'}
+# convert expression set to DESeq2 analysis object
+phylo <- makePhyloseqFromTreeSummarizedExperiment(vm.sub, abund_values = "relative_abundance")
+
+deseqds <- phyloseq_to_deseq2(phylo, ~study_condition)
+
+# Perform DESeq analysis
+dx_only <- DESeq(deseqds, test="Wald", fitType="parametric")
+
+res <- results(dx_only, cooksCutoff = FALSE)
+alpha <- 0.05
+sigtab <- res[which(res$padj < alpha), ]
+sigtab <- cbind(as(sigtab, "data.frame"), as(tax_table(phylo)[rownames(sigtab), ], "matrix"))
+```
+
+```{r}
+# number of significanct differences in microbiota taxa
+nrow(sigtab)
+```
+
+Next we adjust (deconfound) for categorized age. We find 175 significant results:
+
+```{r, warning=FALSE, message=FALSE, results='hide'}
+# set up analysis object - adjust for age as confounder
+dx_age <- phyloseq_to_deseq2(phylo, ~ study_condition + age_category)
+
+# perform DESeq analysis
+dx_age <- DESeq(dx_age, test="Wald", fitType="parametric")
+
+res = results(dx_age, cooksCutoff = FALSE, contrast=c("study_condition", "CRC", "control"))
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(phylo)[rownames(sigtab), ], "matrix"))
+```
+
+```{r}
+nrow(sigtab)
+```
+
+Finally we add in gender. Again observing 183 significant results.
+
+```{r, warning=FALSE, message=FALSE, results='hide'}
+# set up analysis object - adjusting for age and gender
+dx_age_gender <- phyloseq_to_deseq2(phylo, ~ study_condition + age_category + gender)
+
+# perform DESeq analysis
+dx_age_gender <- DESeq(dx_age_gender, test="Wald", fitType="parametric")
+
+res = results(dx_age_gender, cooksCutoff = FALSE, contrast=c("study_condition", "CRC", "control"))
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(phylo)[rownames(sigtab), ], "matrix"))
+```
+
+```{r}
+nrow(sigtab)
+```
+
+As mentioned in the confounding section, estimates obtained for the relationship between the exposure and the outcome have been adjusted for the included confounders (deconfounded). This means that the observed estimate is an averaged effect size across strata of the confounder(s).
+
+::: callout-tip
+## Discussion
+
+After adjusting for confounding by age and gender, we found that colorectal cancer is associated with increased abundance of two taxa, but we would probably still hesitate to argue that we've shown that colorectal cancer causes these changes in abundance.
+
+-   What sources of bias might still potentially affect our model?
+
+-   How could we design a better study to account for these biases?
+:::
+
+## Back to Fisher
+
+At the beginning of the [presentation](presentation.html) we talked a little about RA Fisher and the causal link between smoking and lung cancer.
+
+::: callout-tip
+## Discussion
+
+-   If you wanted to prove Fisher wrong and demonstrate smoking causes lung cancer, how would you do so?
+
+-   One of Fisher's main arguments was that there was a genetic factor that was correlated with both smoking behaviors and lung cancer. He argued that this genetic factor was what was truly causing lung cancer in smokers. How would you test this theory?
+:::
+
+## Further food for thought
+
+1.  Often in our work, we are presented with data that have already been collected and we are asked to analyze it. Other times we have the privilege of designing a study from scratch. And some times we are brought in when the analyses are nearly done for a paper and just asked for our feedback.
+
+    -   When during the study process should we create a DAG?
+
+    -   Is it too late to make a DAG if the analyses are nearly completed?
+
+2.  One important subject that I did not touch on in this workshop was generalizability or transportability of causal findings (applying the results to an external population).
+
+    -   What issues might arise when doing so?
+
+    -   How can a DAG be used to resolve issues of generalizability and transportability?
+
+::: callout-note
+## Conclusions
+
+-   There's no silver bullet for confounding or bias in R or Bioconductor.
+
+    -   We must carefully consider possible sources of bias--ideally as we begin designing the study.
+
+-   DAGs are helpful in providing a clear visualization of the hypothesized causal mechanism and identifying potential confounders.
+
+    -   As Hernan says, "Draw your assumptions before you draw your conclusions."
+
+-   If a confounder was not measured, we cannot easily adjust for it.
+
+-   The definition of a cause is rooted in the counterfactual: we need to find a way to come as close as possible to observing what would have happened if a participant's exposure status had been different.
+:::
+
+## Further Reading/Materials
+
+This has been a basic primer on causal inference but if you'd like to learn more:
+
+-   Pearl and Mackenzie *Book of Why: The New Science of Causal Effect* (easy, fun read!)
+-   Hernan and Robins *Causal Inference* available free online: <https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/>
+-   Pearl *Causality: Models, Reasoning, and Inference*
+-   Hernan's edX course available free online: <https://www.edx.org/course/causal-diagrams-draw-your-assumptions-before-your>
