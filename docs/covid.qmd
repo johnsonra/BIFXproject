@@ -1,10 +1,6 @@
 ---
 title: "COVID Data Exploration"
-format: 
-  html:
-    theme: 
-      light: flatly
-      dark: darkly
+format: docx 
 bibliography: references.bib
 editor: visual
 ---
@@ -97,7 +93,11 @@ if(!file.exists('sisver.RData'))
         ### individuals were hospitalized
         ### event time is between 0 and 30 days
 ########################################################################
-    
+
+    filter(dt_admit >= "2021-01-01" & dt_admit <= "2021-04-05" &
+           hospitalized &
+           event_time > 0 & event_time < 30) %>%
+        
     select(dt_symptoms, dt_admit, dt_death, covid_death, event_date,
            event_time, death_intubation, t_sympt_death, dog, dog_all, 
            private, pet_info, antivirals, diabetes, hyperten, obese,
@@ -158,16 +158,14 @@ Here are Kaplan-Meier plots for our risk factors and confounders.
 make_km_plot <- function(fact)
 {
     # fit survival curve for fact
-    survfit(formula(paste("t_sympt_death ~", fact)), data = sisver) %>%
+  paste("t_sympt_death ~", fact) %>%
+    formula() %>%
+    survfit(data = sisver) %>%
         
-        # plot survival curve
-        autoplot(conf.int = FALSE) +
-        
-########################################################################
-        # modifications to plot: 
-        ### use `cbbPalette` loaded above for colors
-        ### change legend title to match `fact`
-########################################################################
+    # plot survival curve
+    autoplot(conf.int = FALSE) +
+    labs(color = fact) +
+    scale_color_manual(values = cbbPalette[2:3])
 }
 
 make_km_plot('antivirals')
@@ -191,20 +189,16 @@ After removing a few sectors that don't have much data, let's look at this graph
 
 ```{r}
 # start by removing those that have very few samples
-sisver_sub <- sisver %>%
-########################################################################
-## filter `sisver` such that sector is not in:
-## c('CRUZ ROJA', 'ESTATAL', 'IMSS-OPORTUNIDADES', 'SEMAR', 'UNIVERSITARIO')
-########################################################################
+sisver_sub <- filter(sisver, !sector %in% c('CRUZ ROJA', 'ESTATAL', 'IMSS-OPORTUNIDADES', 'SEMAR', 'UNIVERSITARIO'))
+  
 
-########################################################################
-# first stacked bar plot
-## hint: `geom_bar()` is what you want for the stacked bar plot
-########################################################################
+g1 <- ggplot(sisver_sub, aes(dt_admit, fill = dog_all)) +
+  geom_bar() +
+  scale_y_log10() +
+  scale_fill_manual(values = cbbPalette)
+g1
 
-########################################################################
-# grid of stacked bar plots, separated by sector
-########################################################################
+g1 + facet_wrap(~ sector)
 ```
 
 How does the risk of death change by `sector`, compared to the private sector?
