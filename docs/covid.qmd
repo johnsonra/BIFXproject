@@ -54,13 +54,13 @@ if(!file.exists('sisver_public.csv'))
 if(!file.exists('sisver.RData'))
 {
     sisver <- read_csv('sisver_public.csv') %>%
-        rename(dt_symptoms = fecinisi, # date that symptoms started
-               dt_admit = fechreg,     # date admitted to hospital
-               dt_death = fecdef       # death date
+        rename(dt_symptoms = fecha_inicio_sintomas, # date that symptoms started
+               dt_admit = fecha_ingreso,            # date admitted to hospital
+               dt_death = fecha_defuncion           # death date
     ) %>%
     
            # primary outcomes
-    mutate(hospitalized = tipacien == 'HOSPITALIZADO',
+    mutate(hospitalized = tipo_paciente == 'HOSPITALIZADO',
            covid_death = !is.na(dt_death),
            intubation = intubado == 'SI',
            death_intubation = covid_death | intubation,
