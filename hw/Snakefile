@@ -1,0 +1,40 @@
+configfile: "config.yaml"
+
+FILEID = glob_wildcards("untrimmed_fastq/{fileID}.fastq.gz").fileID
+
+
+rule all:
+  input: 
+    expand("qc/{fileID}.trimmed_fastqc.html", fileID = FILEID)
+
+
+rule trim:
+  output:
+    paired1 = "trimmed_fastq/{sample}_1.trimmed.fastq.gz",
+    unpaired1 = "trimmed_fastq/{sample}_1un.trimmed.fastq.gz",
+    paired2 = "trimmed_fastq/{sample}_2.trimmed.fastq.gz",
+    unpaired2 = "trimmed_fastq/{sample}_2un.trimmed.fastq.gz"
+  input:
+    file1 = "untrimmed_fastq/{sample}_1.fastq.gz",
+    file2 = "untrimmed_fastq/{sample}_2.fastq.gz",
+    adapters = "untrimmed_fastq/NexteraPE-PE.fa"
+  params:
+    trim_minlen = config.get("trim_minlen", "25"),
+    trim_window = config.get("trim_window", "4:20"),
+    trim_clip = config.get("trim_clip", "2:40:15")
+  shell:
+    "trimmomatic PE -threads 1 {input.file1} {input.file2} \
+       {output.paired1} {output.unpaired1} {output.paired2} {output.unpaired2} \
+       SLIDINGWINDOW:{params.trim_window} MINLEN:{params.trim_minlen} \
+	   ILLUMINACLIP:{input.adapters}:{params.trim_clip}"
+
+
+rule qc:
+  output:
+    html = "qc/{sampleID}.trimmed_fastqc.html",
+    zip = "qc/{sampleID}.trimmed_fastqc.zip"
+  input:
+    "trimmed_fastq/{sampleID}.trimmed.fastq.gz"
+  shell:
+    "fastqc -o qc {input}"
+
