@@ -1,11 +1,11 @@
 configfile: "config.yaml"
 
-FILEID = glob_wildcards("untrimmed_fastq/{fileID}.fastq.gz").fileID
+SAMPLEID = glob_wildcards("trimmed_fastq_small/{sampleID}_1.trim.sub.fastq").sampleID
 
 
 rule all:
   input: 
-    expand("qc/{fileID}.trimmed_fastqc.html", fileID = FILEID)
+    expand("results/vcf/{sampleID}_final_variants.vcf", sampleID = SAMPLEID)
 
 
 rule trim:
@@ -38,3 +38,57 @@ rule qc:
   shell:
     "fastqc -o qc {input}"
 
+
+rule align:
+  output:
+    "results/sam/{sampleID}.aligned.sam"
+  input:
+    read1 = "trimmed_fastq_small/{sampleID}_1.trim.sub.fastq",
+    read2 = "trimmed_fastq_small/{sampleID}_2.trim.sub.fastq"
+  params:
+    fasta = config["align_fasta"]
+  shell:
+    "bwa mem {params.fasta} {input.read1} {input.read2} > {output}"
+
+
+rule convert:
+  output:
+    "results/bam/{sampleID}.aligned.bam"
+  input:
+    "results/sam/{sampleID}.aligned.sam"
+  shell:
+    "samtools view -S -b {input} > {output}"
+
+
+rule sort:
+  output:
+    "results/bam/{sampleID}.aligned.sorted.bam"
+  input:
+    "results/bam/{sampleID}.aligned.bam"
+  shell:
+    "samtools sort -o {output} {input}"
+
+
+rule coverage:
+  output:
+    "results/bcf/{sampleID}_raw.bcf"
+  input:
+    "results/bam/{sampleID}.aligned.sorted.bam"
+  params:
+    fasta = config["align_fasta"]
+  shell:
+    "bcftools mpileup -O b -o {output} -f {params.fasta} {input}"
+
+
+rule vcf:
+  output:
+    vars = "results/vcf/{sampleID}_variants.vcf",
+    final = "results/vcf/{sampleID}_final_variants.vcf"
+  input:
+    "results/bcf/{sampleID}_raw.bcf"
+  params:
+    ploidy = config.get("ploidy", "2")
+  shell:
+    r"""bcftools call --ploidy {params.ploidy} -m -v -o {output.vars} {input}
+        vcfutils.pl varFilter {output.vars} > {output.final}
+     """
