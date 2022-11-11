@@ -1,0 +1,15 @@
+---
+title: "Lab 4"
+format: docx
+editor: visual
+---
+
+Here is a directed acyclic graph.
+
+```{mermaid}
+graph LR
+    Lifestyle --> B[Insulin Resistance]
+    Genetics --> B
+    B --> C[Obesity]
+    C --> D[Type II Diabetes]
+```
